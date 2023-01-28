@@ -259,6 +259,8 @@ void loop() {
     //ledState = !ledState;
     //digitalWrite(led, ledState);
     std::vector<String> temp_vector = get_received_data();
+    Serial.print("Received: ");
+    Serial.println(temp_vector.size());
     // Start and end points of settingsVector to be updated, default to entire vector. 
     int Start = 0;
     int End   = 17;
@@ -338,6 +340,7 @@ void updateSettingsVector(std::vector<String> temp_vector, int Start, int End)
       settingsVector[i] = temp_vector[i-Start];
     }
   }
+  Serial.println("Updated Settings Vector");
 }
 
 /*
@@ -444,6 +447,7 @@ void timerIsr() {
  *        Nothing, though update system values. 
  */
 void valueUpdate(std::vector<String> temp_vector) {
+  Serial.println("Updated Values_1");
 
   // Machine State
   inputMachineState = atof(temp_vector[0].c_str());
@@ -468,6 +472,7 @@ void valueUpdate(std::vector<String> temp_vector) {
 
   // Time Out Time
   // timeOut = atoi(temp_vector[17].c_str());
+  Serial.println("Updated Values");
 }
 
 // Method just for updating the set point.
@@ -786,6 +791,7 @@ void serialOutput()
 
 void printStatus() 
 {
+  return ;
   Serial.println();
   Serial.print("$");
   for(int i=0; i<settingsVector.size()-1; i++)
