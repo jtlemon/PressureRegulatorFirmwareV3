@@ -57,11 +57,6 @@ machine_setting_t get_received_data()
             }
         }
         splitted_string[count] = current_str.toDouble();
-        Serial.println("splitted string");
-        for (int i = 0; i < 17; i++)
-        {
-            Serial.println(splitted_string[i]);
-        }
         if (1==1)
         {
             decoded_data.onOff = splitted_string[0] > 0;
