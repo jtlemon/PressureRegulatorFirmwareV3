@@ -29,7 +29,7 @@
 #include <PID_v1.h>
 #include "TimerOne.h"
 #include "machine_interface.h"
-//#include <SoftPWM.h>
+#include <SoftPWM.h>
 
 
 String received_serial_chars = "";
@@ -137,10 +137,8 @@ inputControl footPedals[2] = {
 
 
 machine_setting_t current_settings = {
-  false, 0, {false, false, false, false, false, false, false, false, false, false}, 0, 0, 0, 0, 0
+  false, 0, {false, false, false, false, false, false, false, false, false, false}, kp, ki, kd, accuracy, sampleTime
 };
-
-std::vector<String> settingsVector{"0","0","0","0","0","0","0","0","0","0","0","0",String(kp),String(ki),String(kd),String(accuracy),String(sampleTime)};
 
 /*
 // Timing //
@@ -230,21 +228,19 @@ void loop() {
   if (digitalRead(grblSetPin)!= HIGH) // Pullup
   {
     grblFlag = true;
-    settingsVector[0] = "1";
-    //@todo: add it later 
-    //valueUpdate(settingsVector);
+    current_settings.onOff = true;
+    valueUpdate();
   }
   else
   {
     // Until timing is figured out, when the spindal output is disengaged, disengage all vacuum solenoinds. 
     if (grblFlag == true)
     {
-      for (int i=2; i<12; i++)
+      for (int i=0; i<numOfSolenoids; i++)
       {
-        settingsVector[i] = "0";
+        current_settings.solenoidState[i] = false;
       }
-      //@todo add it later 
-      //valueUpdate(settingsVector);
+      valueUpdate();
     }
     grblFlag = false;
   }
@@ -252,8 +248,6 @@ void loop() {
   if(is_new_fast_command_detected())
   {
     char command = get_last_fast_command();
-    Serial.print("Fast Command: ");
-    Serial.println(command);
     if(command == '?')printStatus();
     else if (command == '!'){
       testingState = !testingState;
@@ -288,7 +282,7 @@ void loop() {
   } 
   else 
   {
-    updateSetPoint(atof(settingsVector[1].c_str()));
+    updateSetPoint(current_settings.set_point);
   }
   
 }
@@ -304,22 +298,7 @@ void loop() {
 
 
 
-// Method for updating a portion (or all) of the settings vector. 
-void updateSettingsVector(std::vector<String> temp_vector, int Start, int End) 
-{
-  Serial.println("let's update the settings vector");
-  // Do nothing if invalid value given. 
-  if (End < 17) 
-  {
 
-    for (int i=Start; i<End+1; i++) // 0 , 15 
-    {
-      settingsVector[i] = temp_vector[i-Start];
-    
-    }
-  }
-  Serial.println("finished updating settings vector");
-}
 
 /*
  * Method run each timer driven interrupt. Method to check inputs from foot pedals and
@@ -505,28 +484,8 @@ void valveUpdate() {
     }
   } else {
 
-    if (psiIncrease > accuracy) 
-    {
-      digitalWrite(pressureIncrease, HIGH);
-    }
-    else
-    {
-      digitalWrite(pressureIncrease, LOW);
-    }
-    if (psiDecrease > accuracy) 
-    {
-      digitalWrite(pressureDecrease, HIGH);
-    }
-    else
-    {
-      digitalWrite(pressureDecrease, LOW);
-    }
-    
-    // PWM Valves 
-    /*
     SoftPWMSet(pressureIncrease, psiIncrease);
     SoftPWMSet(pressureDecrease, psiDecrease);
-    */
   }
 }
 
@@ -768,14 +727,22 @@ void serialOutput()
 }
 
 void printStatus(void){
-  Serial.println("Machine Settings: ");
-  Serial.print("onOff: ");
-  Serial.println(current_settings.onOff);
-  Serial.print("set_point: ");
-  Serial.println(current_settings.set_point);
-  Serial.print("Sample time: ");
+  Serial.print(current_settings.onOff);
+  Serial.print(",");
+  Serial.print(current_settings.set_point);
+  for(int i=0; i<10; i++){
+    Serial.print(",");
+    Serial.print(current_settings.solenoidState[i]);
+  }
+  Serial.print(current_settings.kp_value);
+  Serial.print(",");
+  Serial.print(current_settings.ki_value);
+  Serial.print(",");
+  Serial.print(current_settings.kd_value);
+  Serial.print(",");
+  Serial.print(current_settings.accuracy_value);
+  Serial.print(",");
   Serial.println(current_settings.sample_time_value_ms);
-
 }
 
 
