@@ -17,7 +17,7 @@ volatile bool new_fast_command_available = false;
 volatile char last_fast_command = '0';
 
 
-std::vector<String> splitString(String originalString, String delimiter);
+
 
 void init_communication()
 {
@@ -42,20 +42,39 @@ machine_setting_t get_received_data()
     new_configurations_available = false;
     if (!is_configuration_decded)
     {
-        std::vector<String> splitted_string = splitString(last_received_string, ",");
-        if (splitted_string.size() == 17)
+        uint8_t strlen = last_received_string.length();
+        double splitted_string[17];
+        String current_str = "";
+        uint8_t count = 0;
+        for(int i = 0; i < strlen; i++){
+            if(last_received_string.charAt(i) == ','){
+                splitted_string[count] = current_str.toDouble();
+                count++;
+                current_str = "";
+                }
+            else{
+                current_str += last_received_string.charAt(i);
+            }
+        }
+        splitted_string[count] = current_str.toDouble();
+        Serial.println("splitted string");
+        for (int i = 0; i < 17; i++)
         {
-            decoded_data.onOff = splitted_string[0].toInt();
-            decoded_data.set_point = splitted_string[1].toInt();
+            Serial.println(splitted_string[i]);
+        }
+        if (1==1)
+        {
+            decoded_data.onOff = splitted_string[0] > 0;
+            decoded_data.set_point = (uint8_t)splitted_string[1];
             for (int i = 0; i < numOfSolenoids; i++)
             {
-                decoded_data.solenoidState[i] = splitted_string[2 + i].toInt();
+                decoded_data.solenoidState[i] = splitted_string[2 + i]> 0;
             }
-            decoded_data.kp_value = splitted_string[numOfSolenoids+2].toDouble();
-            decoded_data.ki_value = splitted_string[numOfSolenoids+3].toDouble();
-            decoded_data.kd_value = splitted_string[numOfSolenoids+4].toDouble();
-            decoded_data.accuracy_value = splitted_string[numOfSolenoids+5].toInt();
-            decoded_data.sample_time_value_ms = splitted_string[numOfSolenoids+6].toInt();
+            decoded_data.kp_value = splitted_string[numOfSolenoids+2];
+            decoded_data.ki_value = splitted_string[numOfSolenoids+3];
+            decoded_data.kd_value = splitted_string[numOfSolenoids+4];
+            decoded_data.accuracy_value = (int)splitted_string[numOfSolenoids+5];
+            decoded_data.sample_time_value_ms = (int)splitted_string[numOfSolenoids+6];
         }
 
         is_configuration_decded = true;
@@ -110,20 +129,4 @@ void serialEvent()
     }
 }
 
-std::vector<String> splitString(String originalString, String delimiter)
-{
-    std::vector<String> supStrings;
-    String s = originalString;
-    int pos = 0;
-    while ((pos = s.indexOf(delimiter)) != -1)
-    {
-        String token = s.substring(0, pos);
-        if (token.length() > 0)
-            supStrings.push_back(token);
-        s = s.substring(pos + delimiter.length());
-    }
 
-    if (s.length() > 0)
-        supStrings.push_back(s);
-    return supStrings;
-}
