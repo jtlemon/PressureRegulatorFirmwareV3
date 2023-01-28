@@ -84,7 +84,7 @@ int accuracy       = 50;    // This is for using two state solenoid valves. The 
                             // aggressive behavior. 
 
 // I/O Pins for Vacuum Solenoids //
-const int numOfSolenoids = 10;
+
 int solState[numOfSolenoids];  // Array to store state of solenoids.
 #define solenoidOne   2
 #define solenoidTwo   3
@@ -134,9 +134,13 @@ inputControl footPedals[2] = {
 };
 
 // Vector of current machine values - used in being able to update only portions of current settings. 
-std::vector<String> settingsVector{"0","0","0","0","0","0","0","0","0","0","0","0",String(kp),String(ki),String(kd),String(accuracy),String(sampleTime)};
-int validSizes[] = {1,2,10,16};
 
+
+machine_setting_t current_settings = {
+  false, 0, {false, false, false, false, false, false, false, false, false, false}, 0, 0, 0, 0, 0
+};
+
+std::vector<String> settingsVector{"0","0","0","0","0","0","0","0","0","0","0","0",String(kp),String(ki),String(kd),String(accuracy),String(sampleTime)};
 
 /*
 // Timing //
@@ -227,7 +231,8 @@ void loop() {
   {
     grblFlag = true;
     settingsVector[0] = "1";
-    valueUpdate(settingsVector);
+    //@todo: add it later 
+    //valueUpdate(settingsVector);
   }
   else
   {
@@ -238,7 +243,8 @@ void loop() {
       {
         settingsVector[i] = "0";
       }
-      valueUpdate(settingsVector);
+      //@todo add it later 
+      //valueUpdate(settingsVector);
     }
     grblFlag = false;
   }
@@ -260,44 +266,8 @@ void loop() {
     //noInterrupts();
     //ledState = !ledState;
     //digitalWrite(led, ledState);
-    std::vector<String> temp_vector = get_received_data();
-    // Start and end points of settingsVector to be updated, default to entire vector. 
-    int Start = 0;
-    int End   = 17;
-    switch (temp_vector.size()) {
-      // If one value given, update the Machine State.
-      case 1:
-        Start = 0;
-        End   = 0;
-        break;
-      // If two values given, update machine state and setPoint.
-      case 2:
-        Start = 0;
-        End   = 1;
-        break;
-      // If ten values given, update the solenoid states
-      case 10:
-        Start = 2;
-        End   = 11;
-        break;
-      // If 12 values given, update everything up to the PID settings. 
-      case 12:
-        Start = 0;
-        End   = 11;
-        break; 
-      case 16:
-        Start = 0;
-        End   = 15;
-        break;
-      case 17:
-        Start = 0;
-        End   = 16;
-        break;
-      
-    }
-    Serial.println("let's go!");
-    updateSettingsVector(temp_vector,Start,End);
-    valueUpdate(settingsVector);
+    current_settings = get_received_data();
+    valueUpdate();
       
       // For Testing purposes - prints recieved packet information.
       /*
@@ -454,28 +424,28 @@ void timerIsr() {
  * Return: 
  *        Nothing, though update system values. 
  */
-void valueUpdate(std::vector<String> temp_vector) {
+void valueUpdate() {
   Serial.println("let's update the values");
   // Machine State
-  inputMachineState = atof(temp_vector[0].c_str());
+  inputMachineState = current_settings.onOff;
   
-  updateSetPoint(atof(temp_vector[1].c_str()));
+  updateSetPoint(current_settings.set_point);
 
   // Solenoids
-  for(uint8_t i=2; i<(2+numOfSolenoids);  i++)
+  for(uint8_t i=0; i<numOfSolenoids;  i++)
   {
-    solState[i-2] = atof(temp_vector[i].c_str());
+    solState[i-2] = current_settings.solenoidState[i];
   }
 
   // kp/ki/kd
-  kp = atof(temp_vector[12].c_str());
-  ki = atof(temp_vector[13].c_str());
-  kd = atof(temp_vector[14].c_str());
+  kp = current_settings.kp_value;
+  ki = current_settings.ki_value;
+  kd = current_settings.kd_value;
 
   // Center Margin
-  accuracy = atof(temp_vector[15].c_str());
+  accuracy = current_settings.accuracy_value;
   // Sample Time
-  sampleTime = atof(temp_vector[16].c_str());
+  sampleTime = current_settings.sample_time_value_ms;
   // Time Out Time
   // timeOut = atoi(temp_vector[17].c_str());
   Serial.println("finished updating values");
@@ -797,19 +767,17 @@ void serialOutput()
   Serial.println("*");
 }
 
-void printStatus() 
-{
-  Serial.println();
-  Serial.print("$");
-  for(int i=0; i<settingsVector.size()-1; i++)
-  {
-    Serial.print(String(settingsVector[i]));
-    Serial.print(",");
-  }
-  Serial.print(String(settingsVector[settingsVector.size()-1]));
-  Serial.println("*");
-  Serial.println();
+void printStatus(void){
+  Serial.println("Machine Settings: ");
+  Serial.print("onOff: ");
+  Serial.println(current_settings.onOff);
+  Serial.print("set_point: ");
+  Serial.println(current_settings.set_point);
+  Serial.print("Sample time: ");
+  Serial.println(current_settings.sample_time_value_ms);
+
 }
+
 
 /*
  * Method to print an array of char data types. 

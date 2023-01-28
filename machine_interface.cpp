@@ -11,7 +11,7 @@ volatile bool is_configuration_decded = false;
 String last_received_string = "";
 String received_chars = "";
 volatile uint8_t comma_counter = 0;
-std::vector<String> decoded_data;
+machine_setting_t decoded_data;
 
 volatile bool new_fast_command_available = false;
 volatile char last_fast_command = '0';
@@ -37,12 +37,27 @@ char get_last_fast_command(void){
     return last_fast_command;
 }
 
-std::vector<String> get_received_data()
+machine_setting_t get_received_data()
 {
     new_configurations_available = false;
     if (!is_configuration_decded)
     {
-        decoded_data = splitString(last_received_string, ",");
+        std::vector<String> splitted_string = splitString(last_received_string, ",");
+        if (splitted_string.size() == 17)
+        {
+            decoded_data.onOff = splitted_string[0].toInt();
+            decoded_data.set_point = splitted_string[1].toInt();
+            for (int i = 0; i < numOfSolenoids; i++)
+            {
+                decoded_data.solenoidState[i] = splitted_string[2 + i].toInt();
+            }
+            decoded_data.kp_value = splitted_string[numOfSolenoids+2].toDouble();
+            decoded_data.ki_value = splitted_string[numOfSolenoids+3].toDouble();
+            decoded_data.kd_value = splitted_string[numOfSolenoids+4].toDouble();
+            decoded_data.accuracy_value = splitted_string[numOfSolenoids+5].toInt();
+            decoded_data.sample_time_value_ms = splitted_string[numOfSolenoids+6].toInt();
+        }
+
         is_configuration_decded = true;
     }
     return decoded_data;
