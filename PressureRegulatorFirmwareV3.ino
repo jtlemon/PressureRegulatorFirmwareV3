@@ -24,13 +24,16 @@
  *   Also to drive 10 solenoids based on serial data input. 
 */
 #include <Arduino_AVRSTL.h>
+
+
 #include <PID_v1.h>
 #include "TimerOne.h"
+#include "machine_interface.h"
 //#include <SoftPWM.h>
 
-std::vector<String> splitString(String originalString , String delimiter);
+
 String received_serial_chars = "";
-uint8_t comma_counter = 0;
+
 
 
 // I/O Pins for Pressure //
@@ -96,7 +99,6 @@ int solState[numOfSolenoids];  // Array to store state of solenoids.
 
 
 // Serial Data Variables // 
-long baudRate      = 19200;     // Baud Rate
 const byte numChar = 255;       // Number of bytes expected to handle at a time.
 char incomingChar[numChar];     // Array to store incoming data.
 char tempIncChar[numChar];      // Array to copy incoming data into. 
@@ -155,7 +157,7 @@ int  printInterval = 60;
 
 void setup() {
   // Begin Serial Communication
-  Serial.begin(baudRate);
+  init_communication();
 
   // Set up PID
   pidI.SetMode(AUTOMATIC);
@@ -241,14 +243,22 @@ void loop() {
     grblFlag = false;
   }
   
-  if(read_serial_response())
+  if(is_new_fast_command_detected())
+  {
+    char command = get_last_fast_command();
+    if(command == '?')printStatus();
+    else if (command == '!'){
+      testingState = !testingState;
+      printInterval = testingState ? 800 : 60;
+    }
+  }
+  if(is_new_configurations_available())
   {
     timeReference = millis();
     //noInterrupts();
     //ledState = !ledState;
     //digitalWrite(led, ledState);
-    std::vector<String> temp_vector = splitString(received_serial_chars , ",");
-
+    std::vector<String> temp_vector = get_received_data();
     // Start and end points of settingsVector to be updated, default to entire vector. 
     int Start = 0;
     int End   = 17;
@@ -314,72 +324,8 @@ void loop() {
 
 
 
-bool read_serial_response(void)
-{
-    // Read all the lines of the reply from server and print them to Serial
-    // Packet structure: $<machineState, setPoint, sol1, sol2, sol3, sol4, sol5, sol6, sol7, sol8, sol9, sol10, kp, ki, kd, sampleTime>*
-    bool is_received = false;
-    if(Serial.available())
-    {
-      char rec = Serial.read();
-      if(rec =='$')
-      {
-        received_serial_chars = "";
-        comma_counter = 0;
-      }
-      else if (rec == '?')
-      {
-        printStatus();
-        return false;
-      }
-      else if (rec == '!')
-      {
-        testingState = !testingState;
-        if (testingState == true)
-        {
-          printInterval = 800;
-        }
-        else
-        {
-          printInterval = 60;
-        }
-        return false;
-      }
-      else if(rec == '*')
-      {
-          if((comma_counter == 0) || (comma_counter == 1) || (comma_counter == 9) || (comma_counter == 11) || (comma_counter == 16) || (comma_counter == 17))
-          {
-            // this a valid packet
-            is_received = true;
-          }
-          else{
-            received_serial_chars = "";
-            comma_counter = 0;
-          }
-      }
-      else{
-        received_serial_chars += String(rec);
-        if(rec == ',') comma_counter += 1;
-      }
-    }
-    return is_received;
-}
 
-std::vector<String> splitString(String originalString , String delimiter )
-{
-    std::vector<String> supStrings ;
-    String s = originalString;
-    int pos = 0;
-    while ((pos = s.indexOf(delimiter)) !=  -1)
-    {
-        String token = s.substring(0, pos);
-        if(token.length()>0)supStrings.push_back(token);
-        s = s.substring(pos + delimiter.length());
-    }
-    
-    if(s.length()>0)supStrings.push_back(s);
-    return supStrings;
-}
+
 
 // Method for updating a portion (or all) of the settings vector. 
 void updateSettingsVector(std::vector<String> temp_vector, int Start, int End) 
