@@ -8,7 +8,7 @@
 
 typedef struct {
   bool onOff;
-  uint16_t set_point;
+  double set_point;
   bool solenoidState[numOfSolenoids];
   double kp_value;
   double ki_value;

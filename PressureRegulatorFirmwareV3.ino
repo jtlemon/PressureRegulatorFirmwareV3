@@ -186,11 +186,11 @@ void setup() {
 
   pinMode(pressureIncrease, OUTPUT);
   pinMode(pressureDecrease, OUTPUT);
-  /*
+
   SoftPWMBegin();
   SoftPWMSet(pressureIncrease, 0);
   SoftPWMSet(pressureDecrease, 0);
-  */
+
 
   
   // Ensure solenoids off - Machine State == false
@@ -199,7 +199,7 @@ void setup() {
   // Establish Timer and Create Interrupt Every 6ms //
   Timer1.initialize(interruptTime*1000);
   Timer1.attachInterrupt(timerIsr);
-
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
   // Calibrate
   //calibrateZero();
   //calibrateMax();

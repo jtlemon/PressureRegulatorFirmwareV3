@@ -67,7 +67,7 @@ machine_setting_t get_received_data()
             break;
         case 2:
             decoded_data.onOff = splitted_string[0] > 0;
-            decoded_data.set_point = (uint8_t)splitted_string[1];
+            decoded_data.set_point = (double)splitted_string[1];
             break;
         case numOfSolenoids:
             for (int i = 0; i < numOfSolenoids; i++)
@@ -77,7 +77,7 @@ machine_setting_t get_received_data()
             break;
         case numOfSolenoids + 2:
             decoded_data.onOff = splitted_string[0] > 0;
-            decoded_data.set_point = (uint8_t)splitted_string[1];
+            decoded_data.set_point = (double)splitted_string[1];
             for (int i = 0; i < numOfSolenoids; i++)
             {
                 decoded_data.solenoidState[i] = splitted_string[2 + i] > 0;
@@ -85,7 +85,7 @@ machine_setting_t get_received_data()
             break;
         case 17:
             decoded_data.onOff = splitted_string[0] > 0;
-            decoded_data.set_point = (uint8_t)splitted_string[1];
+            decoded_data.set_point = (double)splitted_string[1];
             for (int i = 0; i < numOfSolenoids; i++)
             {
                 decoded_data.solenoidState[i] = splitted_string[2 + i] > 0;
