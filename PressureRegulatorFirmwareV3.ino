@@ -199,8 +199,7 @@ void setup() {
   // Establish Timer and Create Interrupt Every 6ms //
   Timer1.initialize(interruptTime*1000);
   Timer1.attachInterrupt(timerIsr);
-0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-  // Calibrate
+    // Calibrate
   //calibrateZero();
   //calibrateMax();
   footPedals[0].footCurrentState = false;
@@ -260,7 +259,7 @@ void loop() {
     //noInterrupts();
     //ledState = !ledState;
     //digitalWrite(led, ledState);
-    current_settings = get_received_data();
+    get_received_data(current_settings);
     valueUpdate();
       
       // For Testing purposes - prints recieved packet information.

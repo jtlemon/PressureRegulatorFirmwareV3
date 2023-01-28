@@ -36,7 +36,7 @@ char get_last_fast_command(void)
     return last_fast_command;
 }
 
-machine_setting_t get_received_data()
+void get_received_data(machine_setting_t& decoded_data)
 {
     new_configurations_available = false;
     if (!is_configuration_decded)

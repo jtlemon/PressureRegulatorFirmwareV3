@@ -22,6 +22,6 @@ typedef struct {
 void init_communication(void);
 bool is_new_configurations_available(void);
 bool is_new_fast_command_detected(void);
-machine_setting_t get_received_data(void);
+void get_received_data(machine_setting_t&);
 char get_last_fast_command(void);
 #endif
