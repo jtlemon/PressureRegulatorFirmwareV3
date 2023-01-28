@@ -7,14 +7,14 @@
 bool new_configurations_available = false;
 HardwareSerial &serial_dev = Serial;
 
-bool is_configuration_decded = false;
+volatile bool is_configuration_decded = false;
 String last_received_string = "";
 String received_chars = "";
-uint8_t comma_counter = 0;
+volatile uint8_t comma_counter = 0;
 std::vector<String> decoded_data;
 
-bool new_fast_command_available = false;
-char last_fast_command = '0';
+volatile bool new_fast_command_available = false;
+volatile char last_fast_command = '0';
 
 
 std::vector<String> splitString(String originalString, String delimiter);

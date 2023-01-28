@@ -246,6 +246,8 @@ void loop() {
   if(is_new_fast_command_detected())
   {
     char command = get_last_fast_command();
+    Serial.print("Fast Command: ");
+    Serial.println(command);
     if(command == '?')printStatus();
     else if (command == '!'){
       testingState = !testingState;
@@ -259,8 +261,6 @@ void loop() {
     //ledState = !ledState;
     //digitalWrite(led, ledState);
     std::vector<String> temp_vector = get_received_data();
-    Serial.print("Received: ");
-    Serial.println(temp_vector.size());
     // Start and end points of settingsVector to be updated, default to entire vector. 
     int Start = 0;
     int End   = 17;
@@ -288,6 +288,10 @@ void loop() {
       case 16:
         Start = 0;
         End   = 15;
+        break;
+      case 17:
+        Start = 0;
+        End   = 16;
         break;
       
     }
@@ -333,14 +337,15 @@ void loop() {
 void updateSettingsVector(std::vector<String> temp_vector, int Start, int End) 
 {
   // Do nothing if invalid value given. 
-  if (End < 16) 
+  if (End < 17) 
   {
-    for (int i=Start; i<End+1; i++)
+
+    for (int i=Start; i<End+1; i++) // 0 , 15 
     {
       settingsVector[i] = temp_vector[i-Start];
+    
     }
   }
-  Serial.println("Updated Settings Vector");
 }
 
 /*
@@ -447,7 +452,6 @@ void timerIsr() {
  *        Nothing, though update system values. 
  */
 void valueUpdate(std::vector<String> temp_vector) {
-  Serial.println("Updated Values_1");
 
   // Machine State
   inputMachineState = atof(temp_vector[0].c_str());
@@ -469,10 +473,8 @@ void valueUpdate(std::vector<String> temp_vector) {
   accuracy = atof(temp_vector[15].c_str());
   // Sample Time
   sampleTime = atof(temp_vector[16].c_str());
-
   // Time Out Time
   // timeOut = atoi(temp_vector[17].c_str());
-  Serial.println("Updated Values");
 }
 
 // Method just for updating the set point.
@@ -782,6 +784,7 @@ void testingPrints() {
  */
 void serialOutput() 
 {
+  return;
   Serial.print("$");
   Serial.print(footPedals[0].footCurrentState);
   Serial.print(",");
@@ -791,7 +794,6 @@ void serialOutput()
 
 void printStatus() 
 {
-  return ;
   Serial.println();
   Serial.print("$");
   for(int i=0; i<settingsVector.size()-1; i++)
