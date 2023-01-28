@@ -295,6 +295,7 @@ void loop() {
         break;
       
     }
+    Serial.println("let's go!");
     updateSettingsVector(temp_vector,Start,End);
     valueUpdate(settingsVector);
       
@@ -336,6 +337,7 @@ void loop() {
 // Method for updating a portion (or all) of the settings vector. 
 void updateSettingsVector(std::vector<String> temp_vector, int Start, int End) 
 {
+  Serial.println("let's update the settings vector");
   // Do nothing if invalid value given. 
   if (End < 17) 
   {
@@ -346,6 +348,7 @@ void updateSettingsVector(std::vector<String> temp_vector, int Start, int End)
     
     }
   }
+  Serial.println("finished updating settings vector");
 }
 
 /*
@@ -452,7 +455,7 @@ void timerIsr() {
  *        Nothing, though update system values. 
  */
 void valueUpdate(std::vector<String> temp_vector) {
-
+  Serial.println("let's update the values");
   // Machine State
   inputMachineState = atof(temp_vector[0].c_str());
   
@@ -475,7 +478,9 @@ void valueUpdate(std::vector<String> temp_vector) {
   sampleTime = atof(temp_vector[16].c_str());
   // Time Out Time
   // timeOut = atoi(temp_vector[17].c_str());
+  Serial.println("finished updating values");
 }
+
 
 // Method just for updating the set point.
 void updateSetPoint(float serialSetPoint) 
