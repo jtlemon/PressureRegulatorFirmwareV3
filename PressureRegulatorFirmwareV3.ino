@@ -38,8 +38,8 @@ String received_serial_chars = "";
 
 // I/O Pins for Pressure //
 #define PSITransducer     A2  // Transducer to measure PSI in system.
-#define pressureIncrease  A3  // Solenoid that lets air into system.
-#define pressureDecrease  A4  // Solenoid that lets air out of system.
+#define pressureIncrease  5  // Solenoid that lets air into system.
+#define pressureDecrease  6  // Solenoid that lets air out of system.
 
 
 // PID Variables //
@@ -89,8 +89,8 @@ int solState[numOfSolenoids];  // Array to store state of solenoids.
 #define solenoidOne   2
 #define solenoidTwo   3
 #define solenoidThree 4
-#define solenoidFour  5
-#define solenoidFive  6
+#define solenoidFour  12
+#define solenoidFive  13
 #define solenoidSix   7
 #define solenoidSeven 8
 #define solenoidEight 9
