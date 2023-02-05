@@ -16,9 +16,6 @@ machine_setting_t decoded_data;
 volatile bool new_fast_command_available = false;
 volatile char last_fast_command = '0';
 
-
-
-
 void init_communication()
 {
     serial_dev.begin(BAUD_RATE);
@@ -28,16 +25,18 @@ bool is_new_configurations_available()
 {
     return new_configurations_available;
 }
-bool is_new_fast_command_detected(void){
+bool is_new_fast_command_detected(void)
+{
     return new_fast_command_available;
 }
 
-char get_last_fast_command(void){
+char get_last_fast_command(void)
+{
     new_fast_command_available = false;
     return last_fast_command;
 }
 
-machine_setting_t get_received_data()
+void get_received_data(machine_setting_t& decoded_data)
 {
     new_configurations_available = false;
     if (!is_configuration_decded)
@@ -46,30 +45,60 @@ machine_setting_t get_received_data()
         double splitted_string[17];
         String current_str = "";
         uint8_t count = 0;
-        for(int i = 0; i < strlen; i++){
-            if(last_received_string.charAt(i) == ','){
+        for (int i = 0; i < strlen; i++)
+        {
+            if (last_received_string.charAt(i) == ',')
+            {
                 splitted_string[count] = current_str.toDouble();
                 count++;
                 current_str = "";
-                }
-            else{
+            }
+            else
+            {
                 current_str += last_received_string.charAt(i);
             }
         }
         splitted_string[count] = current_str.toDouble();
-        if (1==1)
+        count++;
+        switch (count)
         {
+        case 1:
             decoded_data.onOff = splitted_string[0] > 0;
-            decoded_data.set_point = (uint8_t)splitted_string[1];
+            break;
+        case 2:
+            decoded_data.onOff = splitted_string[0] > 0;
+            decoded_data.set_point = (double)splitted_string[1];
+            break;
+        case numOfSolenoids:
             for (int i = 0; i < numOfSolenoids; i++)
             {
-                decoded_data.solenoidState[i] = splitted_string[2 + i]> 0;
+                decoded_data.solenoidState[i] = splitted_string[i] > 0;
             }
-            decoded_data.kp_value = splitted_string[numOfSolenoids+2];
-            decoded_data.ki_value = splitted_string[numOfSolenoids+3];
-            decoded_data.kd_value = splitted_string[numOfSolenoids+4];
-            decoded_data.accuracy_value = (int)splitted_string[numOfSolenoids+5];
-            decoded_data.sample_time_value_ms = (int)splitted_string[numOfSolenoids+6];
+            break;
+        case numOfSolenoids + 2:
+            decoded_data.onOff = splitted_string[0] > 0;
+            decoded_data.set_point = (double)splitted_string[1];
+            for (int i = 0; i < numOfSolenoids; i++)
+            {
+                decoded_data.solenoidState[i] = splitted_string[2 + i] > 0;
+            }
+            break;
+        case 17:
+            decoded_data.onOff = splitted_string[0] > 0;
+            decoded_data.set_point = (double)splitted_string[1];
+            for (int i = 0; i < numOfSolenoids; i++)
+            {
+                decoded_data.solenoidState[i] = splitted_string[2 + i] > 0;
+            }
+            decoded_data.kp_value = splitted_string[numOfSolenoids + 2];
+            decoded_data.ki_value = splitted_string[numOfSolenoids + 3];
+            decoded_data.kd_value = splitted_string[numOfSolenoids + 4];
+            decoded_data.accuracy_value = (int)splitted_string[numOfSolenoids + 5];
+            decoded_data.sample_time_value_ms = (int)splitted_string[numOfSolenoids + 6];
+            break;
+
+        default:
+            break;
         }
 
         is_configuration_decded = true;
@@ -87,8 +116,9 @@ void serialEvent()
             // start of packet
             received_chars = "";
             comma_counter = 0;
-            
-        }else if(inChar == '!' || inChar == '?'){
+        }
+        else if (inChar == '!' || inChar == '?')
+        {
             last_fast_command = inChar;
             new_fast_command_available = true;
             received_chars = "";
@@ -123,5 +153,3 @@ void serialEvent()
         }
     }
 }
-
-
