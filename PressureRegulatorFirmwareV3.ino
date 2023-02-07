@@ -29,40 +29,33 @@
 #include <PID_v1.h>
 #include "TimerOne.h"
 #include "machine_interface.h"
-#include <SoftPWM.h>
+#include "user_config.h"
+#include "board_utils.h"
 
 
-String received_serial_chars = "";
 
 
-
-// I/O Pins for Pressure //
-#define PSITransducer     A2  // Transducer to measure PSI in system.
-#define pressureIncrease  5  // Solenoid that lets air into system.
-#define pressureDecrease  6  // Solenoid that lets air out of system.
 
 
 // PID Variables //
 double psiInput;         // Analog reads from PSI transducer.
 double psiInputInvert;   // An inverse of the psiInput based on the zero psi reading.
 double psiIncrease;      // Output by PID for input  air PWM (0-255)
-double psiDecrease;      // Output by PID for output air PWM (0-255)
-double setPoint   = 0;   // Relative PSI, calculated amount
+double pidSetPoint   = 0;   // Relative PSI, calculated amount
 bool   grblFlag   = 0;   // Bool stating whether set point is being sent over serial (0) or via pin input from grbl (1).
-int    grblDatPin = A7;  // Pin to get PWM wave from grbl to control set point.
-int    grblSetPin = A5;  // Pin to control grblFlag.
+
+
 // kp, ki, kd are to control the PID with desired aggressiveness\
 // See https://ctms.engin.umich.edu/CTMS/index.php?example=Introduction&section=ControlPID for a math heavy explanation, alternatively 
 // See https://www.mathworks.com/discovery/pid-control.html for a more intuition based video explanation. 
-double kp         = 3;   // How aggressivle the PID responsds to current amount of error.
-double ki         = 5;   // How aggressivle the PID responsds to error over time. 
-double kd         = .5;  // How aggressivle the PID responsds to rate of change of error.
-int sampleTime    = 200; // How often a new output is calculated in milliseconds.
-int outPutLimit   = 255; // PWM limit for PID output.
+double kp         = 50;   // How aggressivle the PID responsds to current amount of error.
+double ki         = 3.5;   // How aggressivle the PID responsds to error over time. 
+double kd         = 0;  // How aggressivle the PID responsds to rate of change of error.
+int sampleTime    = 20; // How often a new output is calculated in milliseconds.
 
-PID pidI(&psiInput, &psiIncrease, &setPoint, kp, ki, kd, P_ON_M, DIRECT);
-PID pidD(&setPoint, &psiDecrease, &psiInput, kp, ki, kd, P_ON_M, DIRECT);
-//PID pidD(&psiInputInverted, &psiDecrease, &setPoint, kp, ki, kd, DIRECT);
+// the target is to maxmize the error 
+PID pidI(&psiInput, &psiIncrease, &pidSetPoint, kp, ki, kd, P_ON_E, DIRECT);
+
 
 
 // Variable to signify if control valves are normally open (true) or normally closed (false) //
@@ -83,36 +76,13 @@ int accuracy       = 50;    // This is for using two state solenoid valves. The 
                             // Thus, a low value would result in more aggressive behavior, while a higher number would result in a less 
                             // aggressive behavior. 
 
-// I/O Pins for Vacuum Solenoids //
 
-int solState[numOfSolenoids];  // Array to store state of solenoids.
-#define solenoidOne   2
-#define solenoidTwo   3
-#define solenoidThree 4
-#define solenoidFour  12
-#define solenoidFive  13
-#define solenoidSix   7
-#define solenoidSeven 8
-#define solenoidEight 9
-#define solenoidNine  10
-#define solenoidTen   11
-
-
-// Serial Data Variables // 
-const byte numChar = 255;       // Number of bytes expected to handle at a time.
-char incomingChar[numChar];     // Array to store incoming data.
-char tempIncChar[numChar];      // Array to copy incoming data into. 
-// int  timeOut       = 60000;     // Time (milliseconds) to wait for serial data before automatically setting machine state to off. 
-unsigned long timeReference;
-// Array for data regarding solenoids given above.
-// The PSI read in will be set to be the set point for the PID.
 
 
 // Foot Pedal Variables and I/O //
 bool inputMachineState     = false;
 volatile bool machineState = false;     // System on or off.
-const int footPedalRight   = A0;  
-const int footPedalLeft    = A1;
+
 const uint8_t debounceTime = 5;         // Interval for debounce time.
 bool currentInputState;                 // Used for debouncer.
 volatile int tickCounter;               // Used for debouncer.
@@ -129,30 +99,21 @@ typedef struct {
 }inputControl;
 
 inputControl footPedals[2] = {
-  {footPedalLeft,  0, 0, 0, false, false},  // Foot pedal on left.
-  {footPedalRight, 0, 0, 0, false, false},  // Foot pedal on right.
+  {FOOT_PEDAL_LEFT,  0, 0, 0, false, false},  // Foot pedal on left.
+  {FOOT_PEDAL_RIGHT, 0, 0, 0, false, false},  // Foot pedal on right.
 };
+
 
 // Vector of current machine values - used in being able to update only portions of current settings. 
-
-
 machine_setting_t current_settings = {
-  false, 0, {false, false, false, false, false, false, false, false, false, false}, kp, ki, kd, accuracy, sampleTime
+  false, pidSetPoint, {false, false, false, false, false, false, false, false, false, false}, kp, ki, kd, accuracy, sampleTime
 };
 
-/*
-// Timing //
-unsigned long timerTime    = 0;
-unsigned long currentTime  = 0;
-unsigned long previousTime = 0;
-int timerDelay = 750;
-*/
 
-#define led 13
-bool ledState = false;
 bool testingState = false;
 int  printInterval = 60;
 
+volatile uint8_t pid_tick_counter = 0;
 //////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////     SET UP     /////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -160,41 +121,11 @@ int  printInterval = 60;
 void setup() {
   // Begin Serial Communication
   init_communication();
-
+  init_board();
   // Set up PID
   pidI.SetMode(AUTOMATIC);
   pidI.SetSampleTime(sampleTime);
-  pidD.SetMode(AUTOMATIC);
-  pidD.SetSampleTime(sampleTime);
-
-  // Establish I/O
-  pinMode(grblDatPin,       INPUT);
-  pinMode(grblSetPin,       INPUT_PULLUP);
-  pinMode(PSITransducer,    INPUT);
-  pinMode(footPedalLeft,    INPUT_PULLUP);
-  pinMode(footPedalRight,   INPUT_PULLUP);
-  pinMode(solenoidOne,      OUTPUT);
-  pinMode(solenoidTwo,      OUTPUT);
-  pinMode(solenoidThree,    OUTPUT);
-  pinMode(solenoidFour,     OUTPUT);
-  pinMode(solenoidFive,     OUTPUT);
-  pinMode(solenoidSix,      OUTPUT);
-  pinMode(solenoidSeven,    OUTPUT);
-  pinMode(solenoidEight,    OUTPUT);
-  pinMode(solenoidNine,     OUTPUT);
-  pinMode(solenoidTen,      OUTPUT);
-
-  pinMode(pressureIncrease, OUTPUT);
-  pinMode(pressureDecrease, OUTPUT);
-
-  SoftPWMBegin();
-  SoftPWMSet(pressureIncrease, 0);
-  SoftPWMSet(pressureDecrease, 0);
-
-
   
-  // Ensure solenoids off - Machine State == false
-  updateSol();
 
   // Establish Timer and Create Interrupt Every 6ms //
   Timer1.initialize(interruptTime*1000);
@@ -205,8 +136,6 @@ void setup() {
   footPedals[0].footCurrentState = false;
   footPedals[1].footCurrentState = false;
 
-  // Time out timer
-  timeReference = millis();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -214,32 +143,22 @@ void setup() {
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 void loop() {
-  // Time out timer check // this was breaking the code and not letting the machine state activate for some reason, inconsistent between devices. 
-  /*
-  if (millis() - timeReference > timeOut) 
-  {
-    settingsVector[0] = "0";
-    valueUpdate(settingsVector);
-  }
-  */
   
   // See where set point data should be coming from.
-  if (digitalRead(grblSetPin)!= HIGH) // Pullup
+  if (digitalRead(GRBL_SET_PIN)!= HIGH) // Pullup
   {
     grblFlag = true;
-    current_settings.onOff = true;
-    valueUpdate();
+    current_settings.onOff = true; //machine is ON BASED on hardware input
+    inputMachineState = true;
   }
   else
   {
     // Until timing is figured out, when the spindal output is disengaged, disengage all vacuum solenoinds. 
     if (grblFlag == true)
     {
-      for (int i=0; i<numOfSolenoids; i++)
-      {
-        current_settings.solenoidState[i] = false;
-      }
-      valueUpdate();
+      turn_off_solenoids();
+      current_settings.onOff = false;
+      inputMachineState = false;
     }
     grblFlag = false;
   }
@@ -255,29 +174,14 @@ void loop() {
   }
   if(is_new_configurations_available())
   {
-    timeReference = millis();
-    //noInterrupts();
-    //ledState = !ledState;
-    //digitalWrite(led, ledState);
     get_received_data(current_settings);
-    valueUpdate();
-      
-      // For Testing purposes - prints recieved packet information.
-      /*
-      if (testingState)
-      {
-        Serial.println("packet received ............");
-        for(uint8_t i=0; i<temp_vector.size();  i++)
-        {
-          Serial.print("the received ele at index ");
-          Serial.print(i);
-          Serial.print(":");
-          Serial.println(atof(temp_vector[i].c_str()));
-        }
-      }
-      */
-      
-    //interrupts();
+    // we have the new settings, now we need to update the PID
+    pidI.SetTunings(current_settings.kp_value, current_settings.ki_value, current_settings.kd_value);
+    pidI.SetSampleTime(current_settings.sample_time_value_ms);
+    if(current_settings.onOff == false)turn_off_solenoids();
+    else update_solonoids_state(current_settings.solenoidState);
+    updateSetPoint(current_settings.set_point); 
+
   } 
   else 
   {
@@ -309,6 +213,7 @@ void loop() {
  */
 void timerIsr() {
   //Serial.println("Entering Interrupt");
+  pid_tick_counter++;
   for(uint8_t i=0; i<2; i++) {
     
     // Get input for each foot pedal.
@@ -358,24 +263,15 @@ void timerIsr() {
       footPedals[i].debouncePressCounter = 0;
     } 
   }
-  
-  // Recieve Incoming Data //
-  //Timer1.stop();
-  //Timer1.resume(); 
-  
-  // Compute PID and Alter Valves //
-  psiInput = analogRead(PSITransducer);
-//  psiInputInverted = 
-  pidI.Compute();
-  pidD.Compute();
-  //Serial.print("Output Right after compute");
-  //Serial.println(psiOutput);
+  if(pid_tick_counter >= current_settings.sample_time_value_ms) {
+    pid_tick_counter = 0;
+    // Compute PID and Alter Valves //
+    psiInput = analogRead(PSI_TRANSDUCER_PIN);
+    pidI.Compute();
+    set_solenoid_pressure(psiIncrease, 255 - psiIncrease);
+  }
 
-  // Update Machine //
-  machineStateUpdate();
-  
   // Update information AND at readable intervals print relevant information.
-  
   tickCounter++;
   if(tickCounter >= printInterval/interruptTime) {
    
@@ -393,41 +289,9 @@ void timerIsr() {
   //Serial.println("Leaving Interrupt"); // For Testing purposes.
 }
 
-/*
- * Method to iterate through input serial data and make value updates as assigned here. 
- * <machineState, setPoint, sol1, sol2, sol3, sol4, sol5, sol6, sol7, sol8, sol9, sol10, kp, ki, kd, sampleTime>
- * Strings Representing: $bool,float,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,float,float,float,int,int*
- * Parameters: 
- *        Vector to parse.
- * Return: 
- *        Nothing, though update system values. 
- */
-void valueUpdate() {
-  Serial.println("let's update the values");
-  // Machine State
-  inputMachineState = current_settings.onOff;
-  
-  updateSetPoint(current_settings.set_point);
 
-  // Solenoids
-  for(uint8_t i=0; i<numOfSolenoids;  i++)
-  {
-    solState[i-2] = current_settings.solenoidState[i];
-  }
 
-  // kp/ki/kd
-  kp = current_settings.kp_value;
-  ki = current_settings.ki_value;
-  kd = current_settings.kd_value;
 
-  // Center Margin
-  accuracy = current_settings.accuracy_value;
-  // Sample Time
-  sampleTime = current_settings.sample_time_value_ms;
-  // Time Out Time
-  // timeOut = atoi(temp_vector[17].c_str());
-  Serial.println("finished updating values");
-}
 
 
 // Method just for updating the set point.
@@ -438,148 +302,22 @@ void updateSetPoint(float serialSetPoint)
   {
     // Get set point from the pin controlled by gerbal. 
     // Should meausure a voltage on scale between 0 and 1023.
-    setPoint = analogRead(grblDatPin);
+    pidSetPoint = analogRead(GRBL_DAT_PIN);
   }
   else 
   {
     // Look at Set Point from serial data. 
-    setPointTemp = serialSetPoint;
-    
-    // Check given PSI is within range before setting (if not in range, PSI does not change).
-    if (setPointTemp <= maxPSI) 
-    {
-       // Calculate setPoint in Steps
-       setPoint = (setPointTemp*multFactor)+zeroPSI;
-    }  
+    //@todo i should map and constrain this value.
+    pidSetPoint = serialSetPoint;
   }
 }
 
-// Method to update the machine. The internal code can force the 
-// machine into the off state, otherwise the machine state is that 
-// of the last given serial input. Then updates all of the solenoids.
-void machineStateUpdate() {
-  machineState = inputMachineState;
-  valveUpdate();
-  updateSol();
-}
 
-/*
- * Method to update state of pressure control valves.
- * Parameters:
- *    None. 
- * Return:
- *    Nothing.
- */
-void valveUpdate() {
-  // Machine in Off State //
-  if (machineState == false) {
-    if (NO == true) {
-      // LOCKS GATES IN OFF STATE...
-      digitalWrite(pressureDecrease, HIGH);
-      digitalWrite(pressureIncrease, HIGH);
-    } else {
-      digitalWrite(pressureDecrease, LOW);
-      digitalWrite(pressureIncrease, LOW);
-    }
-  } else {
 
-    SoftPWMSet(pressureIncrease, psiIncrease);
-    SoftPWMSet(pressureDecrease, psiDecrease);
-  }
-}
 
-/*
- * Method to establish current state of 24V solenoids.
- * Parameters:
- *    None.
- * Return:
- *    Nothing. 
- */
-void updateSol() {
-  if(machineState == false) {
-    digitalWrite(solenoidOne,   LOW);
-    digitalWrite(solenoidTwo,   LOW);
-    digitalWrite(solenoidThree, LOW);
-    digitalWrite(solenoidFour,  LOW);
-    digitalWrite(solenoidFive,  LOW);
-    digitalWrite(solenoidSix,   LOW);
-    digitalWrite(solenoidSeven, LOW);
-    digitalWrite(solenoidEight, LOW);
-    digitalWrite(solenoidNine,  LOW);
-    digitalWrite(solenoidTen,   LOW);
-  } else {
-    // Solenoid One
-    if (solState[0] == 1) {
-      digitalWrite(solenoidOne, HIGH);
-    } else {
-      digitalWrite(solenoidOne, LOW);
-    }
-    
-    // Solenoid Two
-    if (solState[1] == 1) {
-      digitalWrite(solenoidTwo, HIGH);
-    } else {
-      digitalWrite(solenoidTwo, LOW);
-    }
-    
-    // Solenoid Three
-    if (solState[2] == 1) {
-      digitalWrite(solenoidThree, HIGH);
-    } else {
-      digitalWrite(solenoidThree, LOW);
-    }
-    
-    // Solenoid Four
-    if (solState[3] == 1) {
-      digitalWrite(solenoidFour, HIGH);
-    } else {
-      digitalWrite(solenoidFour, LOW);
-    }
 
-    // Solenoid Five
-    if (solState[4] == 1) {
-      digitalWrite(solenoidFive, HIGH);
-    } else {
-      digitalWrite(solenoidFive, LOW);
-    }
-    
-    // Solenoid Six
-    if (solState[5] == 1) {
-      digitalWrite(solenoidSix, HIGH);
-    } else {
-      digitalWrite(solenoidSix, LOW);
-    }
 
-    // Solenoid Seven
-    if (solState[6] == 1) {
-      digitalWrite(solenoidSeven, HIGH);
-    } else {
-      digitalWrite(solenoidSeven, LOW);
-    }
-    
-    // Solenoid Eight
-    if (solState[7] == 1) {
-      digitalWrite(solenoidEight, HIGH);
-    } else {
-      digitalWrite(solenoidEight, LOW);
-    }
 
-    // Solenoid Nine
-    if (solState[8] == 1) {
-      digitalWrite(solenoidNine, HIGH);
-    } else {
-      digitalWrite(solenoidNine, LOW);
-    }
-    
-    // Solenoid Ten
-    if (solState[9] == 1) {
-      digitalWrite(solenoidTen, HIGH);
-    } else {
-      digitalWrite(solenoidTen, LOW);
-    }
-  }
-  return;
-}
 
 /*
  * Method to Calibrate variable "zeroPSI".
@@ -592,18 +330,16 @@ void calibrateZero() {
   
   // Open line up to release all pressure.
   if (NO == true) {
-    digitalWrite(pressureDecrease, LOW);
-    digitalWrite(pressureIncrease, HIGH);
+    set_solenoid_pressure(255, 0);
   } else {
-    digitalWrite(pressureDecrease, HIGH);
-    digitalWrite(pressureIncrease, LOW);
+    set_solenoid_pressure(0, 255);
   }
 
   // Wait for pressure to be released.
   delay(calibrateTime);
 
   // Set the zeroPSI variable to equal whatever the transducer reads when no pressure in the system. 
-  zeroPSI = analogRead(PSITransducer);
+  zeroPSI = analogRead(PSI_TRANSDUCER_PIN);
 
   Serial.println();
   Serial.println("Done Calibrating Zero");
@@ -620,33 +356,30 @@ void calibrateMax() {
   Serial.println("Calibrating Max");
 
   // Read pressure
-  psiInput = analogRead(PSITransducer);
+  psiInput = analogRead(PSI_TRANSDUCER_PIN);
   
   // Fill line up with air, stop at either max air system can handle, or max reading available from transducer.
   while((psiInput < maxSystemStep) && (psiInput < 1023)) {
 
     // Read pressure
-    psiInput = analogRead(PSITransducer);
+    psiInput = analogRead(PSI_TRANSDUCER_PIN);
     
     if (NO == true) {
-      digitalWrite(pressureDecrease, HIGH);
-      digitalWrite(pressureIncrease, LOW);
+      set_solenoid_pressure(0, 255);
     } else {
-      digitalWrite(pressureDecrease, LOW);
-      digitalWrite(pressureIncrease, HIGH);
+      set_solenoid_pressure(255, 0);
     }
   }
 
   // Record pressure when at max. 
-  maxPSI = analogRead(PSITransducer);
+  maxPSI = analogRead(PSI_TRANSDUCER_PIN);
 
   // Start letting air out of system.
   if (NO == true) {
-    digitalWrite(pressureDecrease, LOW);
-    digitalWrite(pressureIncrease, HIGH);
+    set_solenoid_pressure(255, 0);
+
   } else {
-    digitalWrite(pressureDecrease, HIGH);
-    digitalWrite(pressureIncrease, LOW);
+    set_solenoid_pressure(0, 255);
   }
 }
 
@@ -674,34 +407,26 @@ void testingPrints() {
     Serial.print("Right Foot Pedal State:   ");
     Serial.println(footPedals[1].footCurrentState);
     
-    Serial.print("Solenoid States:     [");
-    for(int j=0; j<(numOfSolenoids-1); j++) {
-      Serial.print(solState[j]);
-      Serial.print(",");
-    }
-    Serial.print(solState[numOfSolenoids-1]);
-    Serial.println("]");
+    display_solenoid_state();
     
     Serial.print("Zero PSI:            ");
     Serial.println(zeroPSI);
     Serial.print("Max PSI (steps):     ");
     Serial.println(maxPSI);
     Serial.print("kp:                  ");
-    Serial.println(kp);
+    Serial.println(current_settings.kp_value);
     Serial.print("ki:                  ");
-    Serial.println(ki);
+    Serial.println(current_settings.ki_value);
     Serial.print("kd:                  ");
-    Serial.println(kd);
+    Serial.println(current_settings.kd_value);
     Serial.print("Sample Time:         ");
-    Serial.println(sampleTime);   
+    Serial.println(current_settings.sample_time_value_ms);   
     Serial.print("Set Point:           ");
-    Serial.println(setPoint);   
+    Serial.println(pidSetPoint);   
     Serial.print("Transducer Input:    ");
     Serial.println(psiInput);
     Serial.print("PSI Increase Step:   ");
     Serial.println(psiIncrease);
-    Serial.print("PSI Decrease Step:   ");
-    Serial.println(psiDecrease);
     Serial.println();
     //timerTime = currentTime;
   //}

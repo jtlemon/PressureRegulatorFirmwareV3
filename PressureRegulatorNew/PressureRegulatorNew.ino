@@ -12,7 +12,7 @@ int sampleTime    = 5; // How often a new output is calculated in milliseconds.
 int outPutLimit   = 255; // PWM limit for PID output.
 
 double psiInput;
-double setPoint   = 400;   // Relative PSI, calculated amount
+double pidSetPoint   = 400;   // Relative PSI, calculated amount
 double psiIncrease;      // Output by PID for input  air PWM (0-255)
 double psiDecrease;
 double up = 0;
@@ -20,7 +20,7 @@ double down = 0;
 double step = 20;
 char current_dir = 's';
 PID pidI(&psiInput, &psiIncrease, &setPoint, kp, ki, kd, P_ON_M, DIRECT);
-PID pidD(&setPoint, &psiDecrease, &psiInput, kp, ki, kd, P_ON_M, DIRECT);
+PID pidD(&pidSetPoint, &psiDecrease, &psiInput, kp, ki, kd, P_ON_M, DIRECT);
 
 void change(char dir){
   current_dir = dir;
@@ -62,7 +62,7 @@ void loop()
     noInterrupts();
     Serial.print(psiInput);
     Serial.print(" ");
-    Serial.print(setPoint);
+    Serial.print(pidSetPoint);
     Serial.print(" ");
     Serial.print(up);
     Serial.print(" ");
@@ -82,20 +82,20 @@ void timerIsr() {
   if(psiIncrease > 255) psiIncrease = 255;
   else if(psiIncrease < 0) psiIncrease = 0;
   char dir = current_dir;
-  if(psiInput > setPoint + hysteresis_offset)
+  if(psiInput > pidSetPoint + hysteresis_offset)
   {
      dir = 'd';
      step = 10;
      down=255;
   }
-  else if (psiInput < setPoint - hysteresis_offset)
+  else if (psiInput < pidSetPoint - hysteresis_offset)
   {
       dir = 'u';
       step = 10;
       up=255;
   }
   else{
-     step = abs(setPoint-psiInput) * 0.7;
+     step = abs(pidSetPoint-psiInput) * 0.7;
   }
   change(dir);
   analogWrite(pressureIncrease, up);
