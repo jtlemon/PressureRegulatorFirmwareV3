@@ -118,6 +118,8 @@ volatile uint8_t pid_tick_counter = 0;
 /////////////////////////////////////////     SET UP     /////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
+long lastTime = 0;
+
 void setup() {
   // Begin Serial Communication
   init_communication();
@@ -187,7 +189,14 @@ void loop() {
   {
     updateSetPoint(current_settings.set_point);
   }
-  
+  long now = millis();
+  if(now - lastTime > 100)
+  {
+    lastTime = now;
+    Serial.print(pidSetPoint);
+    Serial.print(" ");
+    Serial.println(psiInput));
+  }
 }
 
 
@@ -270,7 +279,9 @@ void timerIsr() {
     pidI.Compute();
     set_solenoid_pressure(psiIncrease, 255 - psiIncrease);
   }
-
+  
+  //@todo: This is a hack to get the serial output to work.
+  return ;
   // Update information AND at readable intervals print relevant information.
   tickCounter++;
   if(tickCounter >= printInterval/interruptTime) {
@@ -442,7 +453,6 @@ void testingPrints() {
  */
 void serialOutput() 
 {
-  return;
   Serial.print("$");
   Serial.print(footPedals[0].footCurrentState);
   Serial.print(",");
@@ -467,25 +477,6 @@ void printStatus(void){
   Serial.print(current_settings.accuracy_value);
   Serial.print(",");
   Serial.println(current_settings.sample_time_value_ms);
-}
-
-
-/*
- * Method to print an array of char data types. 
- * Parameters: 
- *    Array of Char data values to be printed.
- * Return:
- *    Nothing.
- */
-void printCharArray(char arr[]) {
-  Serial.println();
-  for(int i=0; i<(sizeof(arr)-1); i++) {
-    Serial.print(arr[i]);
-    Serial.print(", ");
-  }
-  Serial.print(arr[sizeof(arr)-1]);
-  Serial.println();
-  return;
 }
 
 // I don't know if Arduino has a method like this for arrays
