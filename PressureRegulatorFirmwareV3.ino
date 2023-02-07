@@ -23,8 +23,6 @@
  *   
  *   Also to drive 10 solenoids based on serial data input. 
 */
-#include <Arduino_AVRSTL.h>
-
 
 #include <PID_v1.h>
 #include "TimerOne.h"
@@ -195,7 +193,7 @@ void loop() {
     lastTime = now;
     Serial.print(pidSetPoint);
     Serial.print(" ");
-    Serial.println(psiInput));
+    Serial.println(psiInput);
   }
 }
 

@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include <avr/interrupt.h>
 #include <avr/io.h>
-#include <Arduino_AVRSTL.h>
 #include "machine_interface.h"
 
 bool new_configurations_available = false;

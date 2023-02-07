@@ -1,7 +1,6 @@
 #ifndef __MACHINE_INTERFACE_H__
 #define __MACHINE_INTERFACE_H__
 #include<Arduino.h>
-#include <Arduino_AVRSTL.h>
 #define BAUD_RATE 19200
 
 # define numOfSolenoids 10
