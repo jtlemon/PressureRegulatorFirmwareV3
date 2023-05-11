@@ -1,7 +1,7 @@
 #ifndef __MACHINE_INTERFACE_H__
 #define __MACHINE_INTERFACE_H__
 #include<Arduino.h>
-#define BAUD_RATE 19200
+#define BAUD_RATE 115200
 
 # define numOfSolenoids 10
 

@@ -11,8 +11,8 @@ double kd         = 0;  // How aggressivle the PID responsds to rate of change o
 int sampleTime    = 5; // How often a new output is calculated in milliseconds.
 int outPutLimit   = 255; // PWM limit for PID output.
 
-double psiInput;
-double pidSetPoint   = 400;   // Relative PSI, calculated amount
+doublee psiInput;
+double pidSetPoint   = 200;   // Relative PSI, calculated amount
 double psiIncrease;      // Output by PID for input  air PWM (0-255)
 double psiDecrease;
 double up = 0;

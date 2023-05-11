@@ -22,6 +22,7 @@ void init_board(void)
     pinMode(solenoids[i].pin, OUTPUT);
     digitalWrite(solenoids[i].pin, solenoids[i].state);
   }
+  TCCR0B = TCCR0B & B11111000 | B00000010; // 8k   for pin 5 and 6
   #ifdef USE_SOFT_PWM
   SoftPWMBegin();
   #endif
@@ -33,8 +34,8 @@ void init_board(void)
   turn_off_solenoids();
 
   // Establish I/O
-  pinMode(PSI_TRANSDUCER_PIN,    INPUT);
-  pinMode(GRBL_DAT_PIN,       INPUT);
+  //pinMode(PSI_TRANSDUCER_PIN,    INPUT);
+  //pinMode(GRBL_DAT_PIN,       INPUT);
   pinMode(GRBL_SET_PIN,       INPUT_PULLUP);
   
   pinMode(FOOT_PEDAL_LEFT,    INPUT_PULLUP);
@@ -46,6 +47,7 @@ void init_board(void)
 
 void set_solenoid_pressure(uint8_t increase_val, uint8_t decrease_val)
 {
+    // Serial.println(increase_val);//
     #ifdef USE_SOFT_PWM
     SoftPWMSet(PRESSURE_INCREASE_PIN, increase_val);
     SoftPWMSet(PRESSURE_DECREASE_PIN, decrease_val);

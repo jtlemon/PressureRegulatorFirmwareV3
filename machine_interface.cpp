@@ -59,6 +59,7 @@ void get_received_data(machine_setting_t& decoded_data)
         }
         splitted_string[count] = current_str.toDouble();
         count++;
+        //Serial.println(count);
         switch (count)
         {
         case 1:
@@ -67,6 +68,7 @@ void get_received_data(machine_setting_t& decoded_data)
         case 2:
             decoded_data.onOff = splitted_string[0] > 0;
             decoded_data.set_point = (double)splitted_string[1];
+          //Serial.println( decoded_data.set_point);
             break;
         case numOfSolenoids:
             for (int i = 0; i < numOfSolenoids; i++)

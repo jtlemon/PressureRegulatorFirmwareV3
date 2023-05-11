@@ -29,9 +29,12 @@
 #include "machine_interface.h"
 #include "user_config.h"
 #include "board_utils.h"
+#include <Wire.h>
 
-
-
+#define OUTPUT_MAX 14745.0 // 90% of 2^14
+#define OUTPUT_MIN 1638.0 // 10%
+#define PRESSURE_MAX 30.0
+#define PRESSURE_MIN 0.0
 
 
 
@@ -39,7 +42,7 @@
 double psiInput;         // Analog reads from PSI transducer.
 double psiInputInvert;   // An inverse of the psiInput based on the zero psi reading.
 double psiIncrease;      // Output by PID for input  air PWM (0-255)
-double pidSetPoint   = 0;   // Relative PSI, calculated amount
+double pidSetPoint   = 900;   // Relative PSI, calculated amount
 bool   grblFlag   = 0;   // Bool stating whether set point is being sent over serial (0) or via pin input from grbl (1).
 
 
@@ -112,16 +115,21 @@ bool testingState = false;
 int  printInterval = 60;
 
 volatile uint8_t pid_tick_counter = 0;
+
+volatile uint16_t sensor_tick_counter = 0;
+
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////     SET UP     /////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 long lastTime = 0;
-
+long lastTimePressure = 0;
 void setup() {
   // Begin Serial Communication
   init_communication();
   init_board();
+  Wire.begin();
   // Set up PID
   pidI.SetMode(AUTOMATIC);
   pidI.SetSampleTime(sampleTime);
@@ -168,13 +176,17 @@ void loop() {
     char command = get_last_fast_command();
     if(command == '?')printStatus();
     else if (command == '!'){
+      Serial.println("start testing mode");
       testingState = !testingState;
       printInterval = testingState ? 800 : 60;
     }
   }
   if(is_new_configurations_available())
   {
+    
     get_received_data(current_settings);
+    Serial.println("mmmmm");
+    //Serial.println(current_settings.set_point);
     // we have the new settings, now we need to update the PID
     pidI.SetTunings(current_settings.kp_value, current_settings.ki_value, current_settings.kd_value);
     pidI.SetSampleTime(current_settings.sample_time_value_ms);
@@ -188,13 +200,18 @@ void loop() {
     updateSetPoint(current_settings.set_point);
   }
   long now = millis();
-  if(now - lastTime > 100)
+  if(now - lastTime > 1000)
   {
     lastTime = now;
-    Serial.print(pidSetPoint);
-    Serial.print(" ");
-    Serial.println(psiInput);
+
   }
+    if(now - lastTimePressure > current_settings.sample_time_value_ms)
+    {
+        read_pressure();
+        pidI.Compute();
+        set_solenoid_pressure(psiIncrease, 255 - psiIncrease);
+        lastTimePressure = millis();
+    }
 }
 
 
@@ -221,6 +238,7 @@ void loop() {
 void timerIsr() {
   //Serial.println("Entering Interrupt");
   pid_tick_counter++;
+  sensor_tick_counter++;
   for(uint8_t i=0; i<2; i++) {
     
     // Get input for each foot pedal.
@@ -270,18 +288,20 @@ void timerIsr() {
       footPedals[i].debouncePressCounter = 0;
     } 
   }
-  if(pid_tick_counter >= current_settings.sample_time_value_ms) {
+  if(pid_tick_counter >=  current_settings.sample_time_value_ms) {
     pid_tick_counter = 0;
     // Compute PID and Alter Valves //
-    psiInput = analogRead(PSI_TRANSDUCER_PIN);
-    pidI.Compute();
-    set_solenoid_pressure(psiIncrease, 255 - psiIncrease);
+    
   }
-  
+  if(sensor_tick_counter >= 100) {
+    sensor_tick_counter = 0;
+    
+  }
   //@todo: This is a hack to get the serial output to work.
-  return ;
+
   // Update information AND at readable intervals print relevant information.
   tickCounter++;
+
   if(tickCounter >= printInterval/interruptTime) {
    
     if (testingState) {
@@ -311,14 +331,17 @@ void updateSetPoint(float serialSetPoint)
   {
     // Get set point from the pin controlled by gerbal. 
     // Should meausure a voltage on scale between 0 and 1023.
-    pidSetPoint = analogRead(GRBL_DAT_PIN);
+    //@todo uncomment this line
+   // pidSetPoint = analogRead(GRBL_DAT_PIN);
   }
   else 
   {
     // Look at Set Point from serial data. 
     //@todo i should map and constrain this value.
     pidSetPoint = serialSetPoint;
+    Serial.println("updated)");
   }
+  pidSetPoint = serialSetPoint;
 }
 
 
@@ -332,65 +355,8 @@ void updateSetPoint(float serialSetPoint)
  * Method to Calibrate variable "zeroPSI".
  * Parameters: None
  * Return: Nothing
- */
-void calibrateZero() {
-  Serial.println();
-  Serial.println("Calibrating Zero");
-  
-  // Open line up to release all pressure.
-  if (NO == true) {
-    set_solenoid_pressure(255, 0);
-  } else {
-    set_solenoid_pressure(0, 255);
-  }
 
-  // Wait for pressure to be released.
-  delay(calibrateTime);
 
-  // Set the zeroPSI variable to equal whatever the transducer reads when no pressure in the system. 
-  zeroPSI = analogRead(PSI_TRANSDUCER_PIN);
-
-  Serial.println();
-  Serial.println("Done Calibrating Zero");
-}
-
-/*
- * Method to calibrate variable "maxPSI".
- * Parameters: None
- * Return: Nothing
- */
-void calibrateMax() {
-  
-  Serial.println();
-  Serial.println("Calibrating Max");
-
-  // Read pressure
-  psiInput = analogRead(PSI_TRANSDUCER_PIN);
-  
-  // Fill line up with air, stop at either max air system can handle, or max reading available from transducer.
-  while((psiInput < maxSystemStep) && (psiInput < 1023)) {
-
-    // Read pressure
-    psiInput = analogRead(PSI_TRANSDUCER_PIN);
-    
-    if (NO == true) {
-      set_solenoid_pressure(0, 255);
-    } else {
-      set_solenoid_pressure(255, 0);
-    }
-  }
-
-  // Record pressure when at max. 
-  maxPSI = analogRead(PSI_TRANSDUCER_PIN);
-
-  // Start letting air out of system.
-  if (NO == true) {
-    set_solenoid_pressure(255, 0);
-
-  } else {
-    set_solenoid_pressure(0, 255);
-  }
-}
 
 /*
  * Method to print potentially valuable information in the testing process.
@@ -488,4 +454,23 @@ bool contains(int arr[], int testValue)
     }
   }
   return false;
+}
+
+void read_pressure(void){
+  uint8_t rec_bytes =  Wire.requestFrom(0x08, 2);    // request 2 bytes from peripheral device #8
+  if(rec_bytes == 2)
+  {
+      uint8_t hi= Wire.read();
+      uint8_t lo= Wire.read();
+      uint8_t status = hi>>6;
+      hi &= 0x3f;
+      uint16_t val = hi;
+      val <<=8;
+      val |= lo;
+      if(status == 0 )
+      {
+         float pressure = (val - PRESSURE_MIN)*(PRESSURE_MAX - PRESSURE_MIN)/(OUTPUT_MAX - OUTPUT_MIN) + PRESSURE_MIN; 
+         psiInput = map(pressure, PRESSURE_MIN, PRESSURE_MAX, 0, 1023);
+      }   
+  }
 }
