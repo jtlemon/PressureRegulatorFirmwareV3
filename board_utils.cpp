@@ -35,12 +35,8 @@ void init_board(void)
 
   // Establish I/O
   //pinMode(PSI_TRANSDUCER_PIN,    INPUT);
-  //pinMode(GRBL_DAT_PIN,       INPUT);
+  pinMode(GRBL_DAT_PIN,       INPUT);
   pinMode(GRBL_SET_PIN,       INPUT_PULLUP);
-  
-  pinMode(FOOT_PEDAL_LEFT,    INPUT_PULLUP);
-  pinMode(FOOT_PEDAL_RIGHT,   INPUT_PULLUP);
-
 }
 
 
@@ -80,9 +76,9 @@ void display_solenoid_state(void)
   Serial.print("Solenoid States:     [");
   for (int i = 0; i < NO_OF_SOLENOIDS-1; i++)
   {
-    Serial.println(solenoids[i].state);
+    Serial.print(solenoids[i].state);
      Serial.print(",");
   }
-  Serial.println(solenoids[NO_OF_SOLENOIDS-1].state);
+  Serial.print(solenoids[NO_OF_SOLENOIDS-1].state);
   Serial.println("]");
 }

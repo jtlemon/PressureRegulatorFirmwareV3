@@ -9,7 +9,6 @@
  *  Input(s):
  *   0-30PSI Pressure Transducer
  *   Serial Data
- *   Momentary Foot Pedals (x2)
  *  Output(s):
  *   5V Solenoid Valve (x2)
  *   24V Solenoid Valve (x10)
@@ -24,7 +23,7 @@
  *   Also to drive 10 solenoids based on serial data input. 
 */
 
-#include <PID_v1.h>
+#include <PID_v1_bc.h>
 #include "TimerOne.h"
 #include "machine_interface.h"
 #include "user_config.h"
@@ -80,30 +79,10 @@ int accuracy       = 50;    // This is for using two state solenoid valves. The 
 
 
 
-// Foot Pedal Variables and I/O //
-bool inputMachineState     = false;
-volatile bool machineState = false;     // System on or off.
-
-const uint8_t debounceTime = 5;         // Interval for debounce time.
-bool currentInputState;                 // Used for debouncer.
-volatile int tickCounter;               // Used for debouncer.
+// Update Timing
 const unsigned int updateEvery = 500;   // Interval (ms) to update machine information.
 const int interruptTime = 6;            // In milliseconds
-
-typedef struct {
-  int  pinNumber;
-  int  debouncePressCounter;
-  int  debounceLiftCounter;
-  int  debounceLiftedCounter;
-  bool pressed;
-  bool footCurrentState;
-}inputControl;
-
-inputControl footPedals[2] = {
-  {FOOT_PEDAL_LEFT,  0, 0, 0, false, false},  // Foot pedal on left.
-  {FOOT_PEDAL_RIGHT, 0, 0, 0, false, false},  // Foot pedal on right.
-};
-
+volatile int tickCounter;               // Used for printing.
 
 // Vector of current machine values - used in being able to update only portions of current settings. 
 machine_setting_t current_settings = {
@@ -141,8 +120,6 @@ void setup() {
     // Calibrate
   //calibrateZero();
   //calibrateMax();
-  footPedals[0].footCurrentState = false;
-  footPedals[1].footCurrentState = false;
 
 }
 
@@ -153,20 +130,18 @@ void setup() {
 void loop() {
   
   // See where set point data should be coming from.
-  if (digitalRead(GRBL_SET_PIN)!= HIGH) // Pullup
+  if (digitalRead(GRBL_SET_PIN) == HIGH) // Pullup
   {
-    grblFlag = true;
     current_settings.onOff = true; //machine is ON BASED on hardware input
-    inputMachineState = true;
+    grblFlag = true;
   }
   else
   {
     // Until timing is figured out, when the spindal output is disengaged, disengage all vacuum solenoinds. 
     if (grblFlag == true)
     {
-      turn_off_solenoids();
       current_settings.onOff = false;
-      inputMachineState = false;
+      turn_off_solenoids();
     }
     grblFlag = false;
   }
@@ -209,7 +184,14 @@ void loop() {
     {
         read_pressure();
         pidI.Compute();
-        set_solenoid_pressure(psiIncrease, 255 - psiIncrease);
+        if (current_settings.onOff)
+        {
+          set_solenoid_pressure(psiIncrease, 255 - psiIncrease);
+        }
+        else
+        {
+          set_solenoid_pressure(0,0);
+        }
         lastTimePressure = millis();
     }
 }
@@ -222,13 +204,8 @@ void loop() {
 
 
 
-
-
-
-
-
 /*
- * Method run each timer driven interrupt. Method to check inputs from foot pedals and
+ * Method run each timer driven interrupt. Method to
  * update the associated side machine states.
  * Parameters:
  *    None.
@@ -239,55 +216,6 @@ void timerIsr() {
   //Serial.println("Entering Interrupt");
   pid_tick_counter++;
   sensor_tick_counter++;
-  for(uint8_t i=0; i<2; i++) {
-    
-    // Get input for each foot pedal.
-    currentInputState = digitalRead(footPedals[i].pinNumber); 
-    // Invert due to pullup.
-    currentInputState = !currentInputState;
-
-    if (currentInputState == HIGH) 
-    {
-      // Make it so there is just a burst of pressed data, so that 
-      // the button does not continuously say that it is on. 
-      footPedals[i].debounceLiftedCounter = 0;
-      footPedals[i].debounceLiftCounter++;
-      if(footPedals[i].debounceLiftCounter >= debounceTime*4) {
-        footPedals[i].footCurrentState = false;
-        footPedals[i].pressed = true;
-        // Reset debounce counter.
-        footPedals[i].debounceLiftCounter = 0;
-      }
-    }
-    else
-    {
-      footPedals[i].pressed = false;
-      /*
-        footPedals[i].debounceLiftCounter = 0;
-        footPedals[i].debounceLiftedCounter++;
-        if(footPedals[i].debounceLiftedCounter >= debounceTime) {
-          footPedals[i].pressed == false;
-          // Reset debounce counter.
-          footPedals[i].debounceLiftedCounter = 0;
-        } */
-    }
-    
-    // If differrent than the last recroded input...
-    //if((currentInputState != footPedals[i].footCurrentState)) {
-    if((currentInputState != footPedals[i].footCurrentState) && (footPedals[i].pressed == false)) {
-      // Increase debounce counter.
-      footPedals[i].debouncePressCounter++;
-      // If enough time has passed where the pedal has not changed state.
-      if(footPedals[i].debouncePressCounter >= debounceTime) {
-        footPedals[i].footCurrentState = currentInputState;
-        // Reset debounce counter.
-        footPedals[i].debouncePressCounter = 0;
-      }
-    } else {
-      // Otherwise, ensure debounce counter is at 0;
-      footPedals[i].debouncePressCounter = 0;
-    } 
-  }
   if(pid_tick_counter >=  current_settings.sample_time_value_ms) {
     pid_tick_counter = 0;
     // Compute PID and Alter Valves //
@@ -332,16 +260,16 @@ void updateSetPoint(float serialSetPoint)
     // Get set point from the pin controlled by gerbal. 
     // Should meausure a voltage on scale between 0 and 1023.
     //@todo uncomment this line
-   // pidSetPoint = analogRead(GRBL_DAT_PIN);
+    pidSetPoint = analogRead(GRBL_DAT_PIN);
   }
   else 
   {
     // Look at Set Point from serial data. 
     //@todo i should map and constrain this value.
     pidSetPoint = serialSetPoint;
-    Serial.println("updated)");
+    //Serial.println("updated");
   }
-  pidSetPoint = serialSetPoint;
+  //pidSetPoint = serialSetPoint;
 }
 
 
@@ -370,17 +298,10 @@ void testingPrints() {
   //if (currentTime >= timerTime+1000) {
     Serial.println();
     Serial.print("MACHINE STATE:       ");
-    Serial.println(machineState);
-    Serial.print("Input Machine State: ");
-    Serial.println(inputMachineState);
+    Serial.println(current_settings.onOff);
     Serial.print("GRBL CONTROL:        ");
     Serial.println(grblFlag);
     Serial.println();
-    
-    Serial.print("Left Foot Pedal State:    ");
-    Serial.println(footPedals[0].footCurrentState);
-    Serial.print("Right Foot Pedal State:   ");
-    Serial.println(footPedals[1].footCurrentState);
     
     display_solenoid_state();
     
@@ -409,7 +330,7 @@ void testingPrints() {
 
 /*
  * Method to output needed information back to the main controller board.
- * Format: $Left_Foot_Pedal_State,Right_Foot_Pedal_State*
+ * Format: 
  * Parameters:
  *    None.
  * Return:
@@ -417,11 +338,7 @@ void testingPrints() {
  */
 void serialOutput() 
 {
-  Serial.print("$");
-  Serial.print(footPedals[0].footCurrentState);
-  Serial.print(",");
-  Serial.print(footPedals[1].footCurrentState);
-  Serial.println("*");
+  
 }
 
 void printStatus(void){
