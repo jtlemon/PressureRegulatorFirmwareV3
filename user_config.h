@@ -15,8 +15,8 @@ const uint8_t solenoidPins[NO_OF_SOLENOIDS] = {13, 6, 12, 11, 8, 7, 4, A6, A3, A
 #define PRESSURE_DECREASE_PIN  6  // Solenoid that lets air out of system.
 
 
-#define GRBL_DAT_PIN A0 // Pin to get PWM wave from grbl to control set point.
-#define GRBL_SET_PIN A7 // Pin to control grblFlag.
+#define GRBL_SET_PIN A0 // Pin to control grblFlag.                                 -FP1 on Board
+#define GRBL_DAT_PIN A1 // Pin to get PWM wave from grbl to control set point.      -FP2 on Board
 
 #endif
 

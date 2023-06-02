@@ -29,7 +29,7 @@ void init_board(void)
   // initialize the pressure pins
   pinMode(PRESSURE_INCREASE_PIN, OUTPUT);
   pinMode(PRESSURE_DECREASE_PIN, OUTPUT);
-  set_solenoid_pressure(0, 0);
+  set_solenoid_pressure(1, 0); // Turn pressure on so that the sanders ensured to retract. 
   // Ensure solenoids off
   turn_off_solenoids();
 
