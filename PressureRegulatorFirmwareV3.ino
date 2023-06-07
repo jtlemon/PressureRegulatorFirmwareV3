@@ -190,7 +190,7 @@ void loop() {
         }
         else
         {
-          set_solenoid_pressure(1, 0); // Turn pressure on so that the sanders ensured to retract. 
+          set_solenoid_pressure(1023, 0); // Turn pressure on so that the sanders ensured to retract. 
         }
         lastTimePressure = millis();
     }
