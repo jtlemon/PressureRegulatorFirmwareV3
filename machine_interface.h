@@ -23,4 +23,5 @@ bool is_new_configurations_available(void);
 bool is_new_fast_command_detected(void);
 void get_received_data(machine_setting_t&);
 char get_last_fast_command(void);
+void copy_solenoid_state_only(machine_setting_t* src, machine_setting_t* dst);
 #endif

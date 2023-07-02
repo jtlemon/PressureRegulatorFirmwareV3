@@ -80,23 +80,38 @@ int accuracy       = 50;    // This is for using two state solenoid valves. The 
 
 
 // Update Timing
-const unsigned int updateEvery = 500;   // Interval (ms) to update machine information.
-const int interruptTime = 6;            // In milliseconds
-volatile int tickCounter;               // Used for printing.
+const unsigned int SEND_BOARD_STATUS_EVERY = 500;   // Interval (ms) to update machine information.
+#define TICK_TIME_US  100  // In microseconds
 
 // Vector of current machine values - used in being able to update only portions of current settings. 
 machine_setting_t current_settings = {
   false, pidSetPoint, {false, false, false, false, false, false, false, false, false, false}, kp, ki, kd, accuracy, sampleTime
 };
 
-
+// some variables for debugging
 bool testingState = false;
 int  printInterval = 60;
+bool updateStatusFlag = false;
+// since the target is to measure the pwm signal on GRBL_DAT_PIN so i will so this from the interupt and I have to track last pin state
+bool lastGrblDataPinStata = LOW;
+// i want to make a variable for high and low time of the pulse
+volatile uint32_t grblPulseWidthHighTicks  = 0; // in ticks 
+volatile uint32_t grblPulseWidth = 0; // this in micro seconds
 
-volatile uint8_t pid_tick_counter = 0;
+volatile uint32_t noPulseChangeTickCounter  = 0; // in ticks
+volatile bool countRaisingEdgeFlag = false;
 
-volatile uint16_t sensor_tick_counter = 0;
+#define GRBL_DEAD_TICKS (((uint32_t) 1000 * 1000) / TICK_TIME_US) // 1000 ms to wait for a pulse to be considered dead
 
+volatile bool lastGrblDataPinState = LOW;
+
+
+// enum variable to monitor the edge 
+typedef enum {
+  GRBL_PULSE_STATE_LOW,
+  GRBL_PULSE_STATE_HIGH,
+
+} grbl_pulse_state_t;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////     SET UP     /////////////////////////////////////////
@@ -104,6 +119,7 @@ volatile uint16_t sensor_tick_counter = 0;
 
 long lastTime = 0;
 long lastTimePressure = 0;
+long lastTimePrint = 0;
 void setup() {
   // Begin Serial Communication
   init_communication();
@@ -112,14 +128,15 @@ void setup() {
   // Set up PID
   pidI.SetMode(AUTOMATIC);
   pidI.SetSampleTime(sampleTime);
-  
+   // Set up pins for solenoids //
+  // initiate the pin state for the GRBL_DAT_PIN
+  lastGrblDataPinStata = digitalRead(GRBL_DAT_PIN);
 
   // Establish Timer and Create Interrupt Every 6ms //
-  Timer1.initialize(interruptTime*1000);
+  Timer1.initialize(TICK_TIME_US);
   Timer1.attachInterrupt(timerIsr);
-    // Calibrate
-  //calibrateZero();
-  //calibrateMax();
+
+ 
 
 }
 
@@ -149,7 +166,7 @@ void loop() {
   if(is_new_fast_command_detected())
   {
     char command = get_last_fast_command();
-    if(command == '?')printStatus();
+    if(command == '?') serialOutput();
     else if (command == '!'){
       Serial.println("start testing mode");
       testingState = !testingState;
@@ -158,42 +175,45 @@ void loop() {
   }
   if(is_new_configurations_available())
   {
+    // create a copy of the current settings
+    machine_setting_t current_settings_copy = current_settings;
+    // get the new settings
+    get_received_data(current_settings_copy);
     
-    get_received_data(current_settings);
-    Serial.println("mmmmm");
-    //Serial.println(current_settings.set_point);
-    // we have the new settings, now we need to update the PID
-    pidI.SetTunings(current_settings.kp_value, current_settings.ki_value, current_settings.kd_value);
-    pidI.SetSampleTime(current_settings.sample_time_value_ms);
-    if(current_settings.onOff == false)turn_off_solenoids();
-    else update_solonoids_state(current_settings.solenoidState);
-    updateSetPoint(current_settings.set_point); 
-
-  } 
+    if(grblFlag){
+          // we will update only the solenoidState
+          copy_solenoid_state_only(&current_settings_copy, &current_settings);
+    }
+    else current_settings = current_settings_copy;
+    if (current_settings.onOff) update_solonoids_state(current_settings_copy.solenoidState);
+    else turn_off_solenoids();
+     
+    // update set point
+    updateSetPoint(current_settings.set_point);
+  } // end if new configurations available
   else 
   {
     updateSetPoint(current_settings.set_point);
   }
-  long now = millis();
-  if(now - lastTime > 1000)
-  {
-    lastTime = now;
 
+  // Update PID
+  long now = millis();
+  if(now - lastTimePressure > current_settings.sample_time_value_ms)
+  {
+      read_pressure();
+      pidI.Compute();
+      if (current_settings.onOff) set_solenoid_pressure(psiIncrease, 255 - psiIncrease);
+      else set_solenoid_pressure(1, 0); // Turn pressure on so that the sanders ensured to retract.
+      lastTimePressure = millis();
   }
-    if(now - lastTimePressure > current_settings.sample_time_value_ms)
-    {
-        read_pressure();
-        pidI.Compute();
-        if (current_settings.onOff)
-        {
-          set_solenoid_pressure(psiIncrease, 255 - psiIncrease);
-        }
-        else
-        {
-          set_solenoid_pressure(1, 0); // Turn pressure on so that the sanders ensured to retract. 
-        }
-        lastTimePressure = millis();
-    }
+
+  // Update information AND at readable intervals print relevant information.
+  if(now - lastTimePrint > SEND_BOARD_STATUS_EVERY)
+  {
+    // Update information
+    
+    lastTimePrint = millis();
+  }
 }
 
 
@@ -213,37 +233,34 @@ void loop() {
  *    Nothing.
  */
 void timerIsr() {
-  //Serial.println("Entering Interrupt");
-  pid_tick_counter++;
-  sensor_tick_counter++;
-  if(pid_tick_counter >=  current_settings.sample_time_value_ms) {
-    pid_tick_counter = 0;
-    // Compute PID and Alter Valves //
-    
-  }
-  if(sensor_tick_counter >= 100) {
-    sensor_tick_counter = 0;
-    
-  }
-  //@todo: This is a hack to get the serial output to work.
+  bool grblDataPinState = digitalRead(GRBL_DAT_PIN);
+  if(grblDataPinState == HIGH && countRaisingEdgeFlag) grblPulseWidthHighTicks++;
 
-  // Update information AND at readable intervals print relevant information.
-  tickCounter++;
-
-  if(tickCounter >= printInterval/interruptTime) {
-   
-    if (testingState) {
-      testingPrints();
+  if (grblDataPinState != lastGrblDataPinState) {
+    // We have a change in state
+    if (grblDataPinState == HIGH) {
+      countRaisingEdgeFlag = true;
     }
-    else
-    {
-      serialOutput();
+    else {
+      grblPulseWidth = grblPulseWidthHighTicks * TICK_TIME_US;
+      grblPulseWidthHighTicks = 0;
     }
-    
-    tickCounter = 0;
+    noPulseChangeTickCounter = 0;
+    lastGrblDataPinState = grblDataPinState;
   }
-  
-  //Serial.println("Leaving Interrupt"); // For Testing purposes.
+  else {
+    // no change in state
+    noPulseChangeTickCounter++;
+  }
+
+
+  if(noPulseChangeTickCounter > GRBL_DEAD_TICKS)
+  {
+    // we have a dead pulse
+    grblPulseWidthHighTicks = 0;
+    grblPulseWidth = 0;
+    noPulseChangeTickCounter = GRBL_DEAD_TICKS + 1; // just to makesure no overflow
+  }  
 }
 
 
@@ -269,7 +286,6 @@ void updateSetPoint(float serialSetPoint)
     pidSetPoint = serialSetPoint;
     //Serial.println("updated");
   }
-  //pidSetPoint = serialSetPoint;
 }
 
 
@@ -338,7 +354,25 @@ void testingPrints() {
  */
 void serialOutput() 
 {
-  
+    /*
+    send packet that contain the folowing information:
+    - on/off
+    - set point
+    - current pressure
+    - solenoid state
+    */
+   Serial.print(current_settings.onOff);
+   Serial.print(",");
+    Serial.print(current_settings.set_point);
+    Serial.print(",");
+    Serial.print(psiInput);
+    for(int i=0; i<numOfSolenoids; i++){
+      Serial.print(",");
+      Serial.print(current_settings.solenoidState[i]);
+    }
+    Serial.print(",");
+    Serial.println(grblPulseWidth);
+
 }
 
 void printStatus(void){

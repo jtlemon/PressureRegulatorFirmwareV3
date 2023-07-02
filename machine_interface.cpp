@@ -154,3 +154,13 @@ void serialEvent()
         }
     }
 }
+
+
+void copy_solenoid_state_only(machine_setting_t* src, machine_setting_t* dst)
+{
+    for (int i = 0; i < numOfSolenoids; i++)
+    {
+        dst->solenoidState[i] = src->solenoidState[i];
+    }
+
+}
