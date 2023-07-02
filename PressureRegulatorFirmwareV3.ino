@@ -198,14 +198,20 @@ void loop() {
 
   // Update PID
   long now = millis();
-  if(now - lastTimePressure > current_settings.sample_time_value_ms)
-  {
-      read_pressure();
-      pidI.Compute();
-      if (current_settings.onOff) set_solenoid_pressure(psiIncrease, 255 - psiIncrease);
-      else set_solenoid_pressure(1, 0); // Turn pressure on so that the sanders ensured to retract.
-      lastTimePressure = millis();
-  }
+     if(now - lastTimePressure > current_settings.sample_time_value_ms)
+    {
+        read_pressure();
+        pidI.Compute();
+        if (current_settings.onOff)
+        {
+          set_solenoid_pressure(psiIncrease, 255 - psiIncrease);
+        }
+        else
+        {
+          set_solenoid_pressure(1023, 0); // Turn pressure on so that the sanders ensured to retract. 
+        }
+        lastTimePressure = millis();
+    }
 
   // Update information AND at readable intervals print relevant information.
   if(now - lastTimePrint > SEND_BOARD_STATUS_EVERY)
