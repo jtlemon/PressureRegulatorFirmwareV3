@@ -149,8 +149,8 @@ void loop() {
   // See where set point data should be coming from.
   if (digitalRead(GRBL_SET_PIN) == HIGH) // Pullup
   {
-    current_settings.onOff = true; //machine is ON BASED on hardware input
-    grblFlag = true;
+    //current_settings.onOff = true; //machine is ON BASED on hardware input
+  //  grblFlag = true;
   }
   else
   {
@@ -162,6 +162,7 @@ void loop() {
     }
     grblFlag = false;
   }
+  grblFlag = false;
   
   if(is_new_fast_command_detected())
   {
@@ -208,7 +209,10 @@ void loop() {
         }
         else
         {
-          set_solenoid_pressure(1023, 0); // Turn pressure on so that the sanders ensured to retract. 
+
+          digitalWrite(PRESSURE_INCREASE_PIN, HIGH);
+          digitalWrite(PRESSURE_DECREASE_PIN, LOW);
+
         }
         lastTimePressure = millis();
     }
@@ -283,7 +287,8 @@ void updateSetPoint(float serialSetPoint)
     // Get set point from the pin controlled by gerbal. 
     // Should meausure a voltage on scale between 0 and 1023.
     //@todo uncomment this line
-    pidSetPoint = analogRead(GRBL_DAT_PIN);
+    pidSetPoint = map(analogRead(GRBL_DAT_PIN), 0, 1023, 0, 1000);
+
   }
   else 
   {
@@ -374,10 +379,21 @@ void serialOutput()
     Serial.print(psiInput);
     for(int i=0; i<numOfSolenoids; i++){
       Serial.print(",");
-      Serial.print(current_settings.solenoidState[i]);
+      bool state = digitalRead(solenoidPins[i]);
+      Serial.print( state);
     }
     Serial.print(",");
-    Serial.println(grblPulseWidth);
+    Serial.print(grblPulseWidth);
+     Serial.print(",");
+    Serial.print(digitalRead(PRESSURE_INCREASE_PIN));
+    Serial.print("-");
+    Serial.print(digitalRead(PRESSURE_DECREASE_PIN));
+
+    
+
+    Serial.print(",");
+    Serial.println(grblFlag);
+    
 
 }
 
