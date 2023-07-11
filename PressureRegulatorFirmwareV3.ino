@@ -81,7 +81,7 @@ int accuracy       = 50;    // This is for using two state solenoid valves. The 
 
 // Update Timing
 const unsigned int SEND_BOARD_STATUS_EVERY = 500;   // Interval (ms) to update machine information.
-#define TICK_TIME_US  100  // In microseconds
+#define TICK_TIME_US  20  // In microseconds
 
 // Vector of current machine values - used in being able to update only portions of current settings. 
 machine_setting_t current_settings = {
@@ -120,6 +120,8 @@ typedef enum {
 long lastTime = 0;
 long lastTimePressure = 0;
 long lastTimePrint = 0;
+
+
 void setup() {
   // Begin Serial Communication
   init_communication();
@@ -150,7 +152,7 @@ void loop() {
   if (digitalRead(GRBL_SET_PIN) == HIGH) // Pullup
   {
     //current_settings.onOff = true; //machine is ON BASED on hardware input
-  //  grblFlag = true;
+    grblFlag = true;
   }
   else
   {
@@ -162,7 +164,7 @@ void loop() {
     }
     grblFlag = false;
   }
-  grblFlag = false;
+
   
   if(is_new_fast_command_detected())
   {
@@ -203,7 +205,7 @@ void loop() {
     {
         read_pressure();
         pidI.Compute();
-        if (current_settings.onOff)
+        if (current_settings.onOff || grblFlag)
         {
           set_solenoid_pressure(psiIncrease, 255 - psiIncrease);
         }
@@ -252,7 +254,7 @@ void timerIsr() {
       countRaisingEdgeFlag = true;
     }
     else {
-      grblPulseWidth = grblPulseWidthHighTicks * TICK_TIME_US;
+      grblPulseWidth = grblPulseWidthHighTicks;
       grblPulseWidthHighTicks = 0;
     }
     noPulseChangeTickCounter = 0;
@@ -268,7 +270,7 @@ void timerIsr() {
   {
     // we have a dead pulse
     grblPulseWidthHighTicks = 0;
-    grblPulseWidth = 0;
+    grblPulseWidth = (grblDataPinState? 25:0);
     noPulseChangeTickCounter = GRBL_DEAD_TICKS + 1; // just to makesure no overflow
   }  
 }
@@ -287,7 +289,7 @@ void updateSetPoint(float serialSetPoint)
     // Get set point from the pin controlled by gerbal. 
     // Should meausure a voltage on scale between 0 and 1023.
     //@todo uncomment this line
-    pidSetPoint = map(analogRead(GRBL_DAT_PIN), 0, 1023, 0, 1000);
+    pidSetPoint =map(grblPulseWidth, 0, 25, 0, 1000);
 
   }
   else 
@@ -374,7 +376,7 @@ void serialOutput()
     */
    Serial.print(current_settings.onOff);
    Serial.print(",");
-    Serial.print(current_settings.set_point);
+    Serial.print(pidSetPoint);
     Serial.print(",");
     Serial.print(psiInput);
     for(int i=0; i<numOfSolenoids; i++){
@@ -383,14 +385,12 @@ void serialOutput()
       Serial.print( state);
     }
     Serial.print(",");
-    Serial.print(grblPulseWidth);
-     Serial.print(",");
+    Serial.print(map(grblPulseWidth, 0, 25, 0, 100));
+
+     Serial.print("%,");
     Serial.print(digitalRead(PRESSURE_INCREASE_PIN));
     Serial.print("-");
     Serial.print(digitalRead(PRESSURE_DECREASE_PIN));
-
-    
-
     Serial.print(",");
     Serial.println(grblFlag);
     
